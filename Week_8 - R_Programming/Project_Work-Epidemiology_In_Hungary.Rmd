@@ -1,0 +1,200 @@
+---
+title: "The Spatio-Temporal Analysis Of The Epidemiology Of Chickenpox In Hungary For A Decade"
+author: "Peter Abban"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+  toc: true
+  toc_float: true
+---
+
+**Subject**: Multivariable Statistics
+
+```{r setup, include=FALSE}
+# Importing the libraries or dependencies
+library(ggplot2)
+library(lubridate)
+library(sp)
+library(spdep)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(forecast)
+library(sf)
+# Loading of the Chickenpox Dataset
+data <- read.csv("hungary_chickenpox.csv")
+# Adjustment of date format
+data$Date <- as.Date(data$Date, format = "%d/%m/%Y")
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# . **CHAPTER ONE**
+
+**INTRODUCTION** :
+
+Chickenpox, caused by the Varicella-zoster Virus(VZV) [1], is a highly contagious viral infection that is characterized by an itchy rash and flu-like symptoms, headache or nausea [2]. By the age 20 more than 90 percent of the population is exposed to the VZV in developed countries [3]. Understanding the epidemiology of chickenpox is crucial for effective public health interventions and vaccination strategies [4]
+This study focuses on the spatio-temporal epidemiology of chickenpox in Hungary for 10-years
+
+**Task**: Compilation And Analysis Report On The Spatio-Temporal Epidemiology Of Chickenpox In Hungary for 10-years.
+
+**Objectives**:
+
+The objectives of this task involves the analysis:
+
+- Long-term trends (national and county-level)
+- Short-term patterns and seasonality
+- County comparison (values over the same period) and the
+- Temporal and spatial autocorrelation analysis
+
+# . **CHAPTER TWO**
+
+**DATA DESCRIPTION** :
+
+The dataset used for this study was derived from the *Hungarian National Public Health Center (NNPHC)*, which collects and maintains epidemiological data on infectious diseases, including chickenpox. Physicians report each case to the local center of epidemiology which are then aggregated and publicly presented weekly for each of the 20 counties of Hungary [5]
+
+**Time Period Covered**: The dataset spans a *10-year period* from *2005 to 2015*. This timeframe allows for indepth analysis of the trends, seasonal patterns and spatial distribution of chickenpox cases across different counties in Hungary [5]
+
+**Relevant Variables**: The variables of the dataset involves the Dates of the occurrences, the 20 Counties and the total number of cases for each County.
+
+# . **CHAPTER THREE**
+
+**METHODOLOGY** :
+
+The dataset were processed by converting the Date column into the format of year-month-day.
+A long format of the dataset was produced which comprised of the Date, the County and Cases of each County. A dataframe of National-data, County-data, Intra-annual data, Comparison-data for each County and Temporal-Autocorrelation which constituted of monthly-cases were created to meet the objectives defined for the task
+
+```{r,echo= FALSE,tidy = TRUE, include=FALSE}
+# Formatting of dataset into long-format
+long_data <- data %>%
+  pivot_longer(cols = -Date, names_to = "County", values_to = "Cases")
+# Aggregating data for longer-trends: Nationally
+national_data <- long_data %>%
+  group_by(Date) %>%
+  summarize(total_cases = sum(Cases), .groups ='drop') %>%
+  arrange(desc(total_cases))
+national_data$Date <- as.Date(national_data$Date, format = "%Y-%m-%d")
+# Aggregation of data for longer-trends: by County
+County_data <- long_data %>%
+  group_by(County, Date) %>%
+  summarize(total_cases = sum(Cases), .groups = 'drop')
+County_data$Date <- as.Date(County_data$Date, format = "%Y-%m-%d")
+# Creating an Intra-Annual Seasonal Plot
+Seasonal_data <- national_data %>%
+  filter(year(Date) == 2012) %>%
+  mutate(Month = factor(month(Date, label = TRUE), levels = month.abb))%>%
+  group_by(Month) %>%
+  summarize(total_cases = sum(total_cases))
+# County Comparison of the Chickpox dataset
+comparison_data <- County_data %>%
+  filter(Date >= min(Date) & Date <= max(Date))
+# Analysing for Auto-Correlation in the dataset
+# Temporal Autocorrelation
+monthly_cases <- County_data %>%
+  mutate(month = floor_date(Date, "month")) %>%
+  group_by(month, County) %>%
+  summarize(total_cases = sum(total_cases), .groups ='drop')
+```
+
+
+
+# . **CHAPTER FOUR**
+
+**RESULTS** :
+
+
+```{r Nationa-data, tidy = TRUE, echo = TRUE, tab.cap = "Table Showing Five Datasets Of The National Trend"}
+knitr:: kable(head(national_data))
+```
+
+```{r County-data, tidy = TRUE, echo = TRUE, tab.cap = "Table Showing Five Datasets of the County Trend"}
+knitr:: kable(head(County_data))
+```
+
+```{r National-Plot, tidy = TRUE, echo=TRUE, fig.cap = "Plot Of National Chickenpox Cases for 10-years Period"}
+# Creating the National Plot
+ggplot(national_data, aes(x = unique(Date), y = total_cases, color = Date)) +
+  geom_line() + scale_y_log10() + annotation_logticks(side = "l")+
+  labs(title = "National Chickenpox Daily Cases Between 2005-2015",
+       x = "Years",
+       y = "Total Cases/Day")+ theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))   # Rotation of x-axis labels by 45 degrees
+```
+
+```{r County-Plot, tidy = TRUE, echo=TRUE, fig.cap = "Plot Of County Chickenpox Cases for 10-years Period"}
+# Creation of the County Plot
+ggplot(County_data, aes(x = County, y = total_cases, color = County)) +
+  geom_line()+
+  labs(title = "Chickenpox Weekly Cases by County Between 2005-2015",
+       x = "County",
+       y = "Total Cases/weekly") +
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r Intra-Annualar, tidy = TRUE, echo=TRUE, fig.cap = "Plot Of Intra-Annual Chickenpox Cases for the year 2012"}
+# Analysing for Intra-annual Chickenpox Cases
+ggplot(Seasonal_data, aes(x = Month, y = total_cases))+ geom_line(color = "blue", group = 1)+
+  geom_point(color = "blue", size = 2)+
+  labs(title ="Intra-Annual Monthly Cases of Chickenpox For 2012", x ="Months", y = "Total Cases/Month")+
+  theme_minimal()+
+  scale_y_continuous(labels = comma)+ theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+```{r County-comparson,tidy = TRUE, echo=TRUE, fig.cap = "Plot Of County-County Cases of Chiickenpox per weekly for 10-years Period"}
+# County Comparison of the Chickpox dataset
+ggplot(comparison_data, aes(x = Date, y = total_cases, color = County))+
+geom_line()+ facet_wrap(~County)+
+labs(title ="Comparion of chickenpox  Weakly Cases By County",
+  x = "Date/years",
+  y = "Total Cases/weekly")+
+  theme_minimal() +
+  scale_y_continuous(labels = comma)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+- Temporal Autocorrelation of the Chickenpox Cases
+
+```{r Temporal-Correlation, tidy=TRUE, echo=TRUE, fig.cap = "Temporal AutoCorrelation Of The Chickenpox Cases"}
+acf(monthly_cases$total_cases, main = "ACF Of The Chickenpox Cases")
+```
+
+
+# . **CHAPTER FIVE**
+
+**DISCUSSION** :
+
+The study aimed at analysing the longer-term (Nationally and by county) and shorter-terms (seasonally) of the chickenpox cases for a decade in Hungary. The national trend for all counties as shown in figure \@ref(fig:National-Plot) revealed a notably high cases of chickenpox mostly from the first month of every year and gradually decreasing when transiting between summer and spring and then rising again in the periods of winter. In the period of spring specifically August-October happens to record the less cases for all counties throughout the years. 
+
+Similarly by County comparison as shown in figure \@ref(fig:County-Plot) for weekly cases, Budapest with the largest population size tends to record the highest number of cases followed by Pest, Borsod, Bacs, Hajdu, Szabolcs etc. and the least being Nograd. These obervations can be attributed to the fact that seasonal periods have much influence in the rise or fall of chickenpox cases and as well as population density. In order words, increased interactions among crowded places, high mobility in urban areas and seasonal periods of transiting between winter and summer results in high chickenpox cases as people tend to have more close contact with each other. 
+This also agrees with the Intra-annual seasonal period monthly report for the year 2012 as shown in figure \@ref(fig:Intra-Annualar) as more cases were recorded with respect to all counties per month which gradually decreases substantially and becomes stable between the months of August-September.
+
+Furthermore, by County-County comparison as shown in figure \@ref(fig:County-comparson) indicates some clustering of fewer reported cases for some counties with the exception of Budapest, Pest and Hajdu having reported high cases per week.This indicates a spatial auto-correlation among the counties with respect to the clustering of more fewer cases. Regarding the temporal auto-correlation as shown in figure \@ref(fig:Temporal-Correlation) a high value of 1 was reported from the graph indicating a perfect correlation. This implies, that specific month cases are correlated with itself and forms the baseline for auto-correlation. Moreover, we also obtained a value of 0.8 acf at lag 20 suggesting that the number chickenpox cases in that specific month is correlated with the number of cases from the past 20 months indicating a long-term cycle period and also suggesting that outbreaks may occur approximately every 20 months.
+
+# . **CHAPTER SIX**
+
+**CONCLUSION** :
+
+The analyses of the national-trend over the decade indicated high peaks of cases between the seasonal periods of winter and summer for all counties throughout the years. This suggest the effectiveness of vaccination programs during this period. Examining trends in the county levels has Budapest and Pest recording the highest number of cases due to high population density and healthcare access.The graph of the Intra-annual seasonal period for the year 2012 suggested more recorded cases most likely in the early weeks of each month for all counties with a stability occurring in spring (August-September). This implies there should be more sensitization and vaccination awareness creation during the first weeks of the months specifically in-between winter and summer for all counties. 
+The comparative study of all counties showed spatial auto-correlation as there were more clustering of fewer cases for most counties with a few exceptions. The temporal auto-correlation also suggested that the rise in chickenpox cases for a specific month was correlated with 20 months prior and has the tendency of repeating after the next 20 months.
+
+
+
+**REFERENCES** :
+
+[1] Arvin, A.M.: Varicella-zoster virus. *Clinical Microbiology Review 9*, Vol.3,(1996), 361-381.
+
+[2] Monica, L., McCrany, Jessica, S., Tyring, S.K: Varicella-zoster virus. *Journal of the American Academy of Dermatology 42*, Vol.1,(1999), 1-16.
+
+[3] Peter, W.C., Donahue, J.G., Manson, J.E., Platt, R.: Epidemiology of varicella and its complications. *The Journal of Infection Diseases 172*, Vol.3, (1995), 706-712.
+
+[4] Seward, J.: Varicella Disease after of introduction of varicella vaccine in United States. *JAMA*, Vol.287,(2002), 606.
+
+[5] Rozemberczki, B., Scherer, P., Kiss, O., Sarker, R., Ferenci, Tamas.: Chickenpox cases in Hungary: a benchmark dataset for spatiotemporal signal processing with graph neural network. *Ljubljana, SL*, (2021).
+
+
+
+
+
+
+
+
